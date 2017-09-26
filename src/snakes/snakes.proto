@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+message Snake {
+  float VelocityX = 1;
+  float VelocityY = 2;
+  int32 Length = 3;
+  int32 Symbol = 4;
+
+  message Point {
+    float X = 1;
+    float Y = 2;
+  }
+
+  repeated Point Tail = 5;
+}

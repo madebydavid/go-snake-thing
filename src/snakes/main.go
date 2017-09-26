@@ -2,6 +2,8 @@ package main
 
 import (
     tm "github.com/buger/goterm"
+    "github.com/go-redis/redis"
+    "fmt"
     "time"
     "math"
     "math/rand"
@@ -19,17 +21,11 @@ type Point struct {
 }
 
 type Snake struct {
-    Point
     VelocityX float64
     VelocityY float64
     Length int
     Symbol rune
     Tail []Point
-}
-
-type Renderable interface {
-    GetRow() int
-    GetColumn() int
 }
 
 func (point Point) GetRow() int {
@@ -38,14 +34,6 @@ func (point Point) GetRow() int {
 
 func (point Point) GetColumn() int {
     return round((point).X)
-}
-
-func (snake Snake) GetRow() int {
-    return round((snake).Y)
-}
-
-func (snake Snake) GetColumn() int {
-    return round((snake).X)
 }
 
 func round(num float64) int {
@@ -85,7 +73,7 @@ func renderWorld(world World) {
     tm.Flush()
 }
 
-func putSymbolAtPoint(world *World, symbol rune, point Renderable) {
+func putSymbolAtPoint(world *World, symbol rune, point Point) {
     (*world).Grid[point.GetRow()][point.GetColumn()] = symbol;
 }
 
@@ -98,39 +86,40 @@ func moveSnakes(snakes *[]Snake, world *World) {
 
         snake := (*snakes)[i]
 
+        // Clear the rendered tail
         for _, tailPoint := range snake.Tail {
             putSymbolAtPoint(world, 0, tailPoint);
         }
 
-        putSymbolAtPoint(world, 0, snake);
+        // Get the most recent point
+        previousTailPoint := (*snakes)[i].Tail[0]
 
-        (*snakes)[i].X += snake.VelocityX
-
-        if (*snakes)[i].X >= maxX || (*snakes)[i].X < 0 {
-            (*snakes)[i].VelocityX *= -1
-            (*snakes)[i].X += (*snakes)[i].VelocityX
-        }
-
-        (*snakes)[i].Y += snake.VelocityY
-
-        if (*snakes)[i].Y >= maxY || (*snakes)[i].Y < 0 {
-            (*snakes)[i].VelocityY *= -1
-            (*snakes)[i].Y += (*snakes)[i].VelocityY
-        }
-
+        // Apply the velocity and create new point
         newTailPoint := Point{
-            X: (*snakes)[i].X,
-            Y: (*snakes)[i].Y,
+            X: previousTailPoint.X + snake.VelocityX,
+            Y: previousTailPoint.Y + snake.VelocityY,
         }
 
+        // If on edge bounce
+        if newTailPoint.X >= maxX || newTailPoint.X < 0 {
+            (*snakes)[i].VelocityX *= -1
+            newTailPoint.X += (*snakes)[i].VelocityX
+        }
+
+        if newTailPoint.Y >= maxY || newTailPoint.Y < 0 {
+            (*snakes)[i].VelocityY *= -1
+            newTailPoint.Y += (*snakes)[i].VelocityY
+        }
+
+        // Append to begining of tail
         (*snakes)[i].Tail = append([]Point{newTailPoint} ,(*snakes)[i].Tail...)
 
+        // Trim tail to tail length
         if len((*snakes)[i].Tail) > (*snakes)[i].Length { 
-            (*snakes)[i].Tail = (*snakes)[i].Tail[1:(*snakes)[i].Length]
+            (*snakes)[i].Tail = (*snakes)[i].Tail[0:(*snakes)[i].Length]
         }
-
-        putSymbolAtPoint(world, snake.Symbol, (*snakes)[i]);
-
+        
+        // Render the tail
         for _, tailPoint := range (*snakes)[i].Tail {
             putSymbolAtPoint(world, snake.Symbol, tailPoint);
         }
@@ -140,6 +129,15 @@ func moveSnakes(snakes *[]Snake, world *World) {
 
 
 func main() {
+
+    client := redis.NewClient(&redis.Options{
+        Addr:     "localhost:6379",
+        Password: "", // no password set
+        DB:       0,  // use default DB
+    })
+
+    pong, err := client.Ping().Result()
+    fmt.Println(pong, err)
 
     rand.Seed(time.Now().UTC().UnixNano())
 
@@ -151,16 +149,20 @@ func main() {
     const firstSymbol rune = 'A'
 
     for i := 0; i < snakeCount; i++ {
+
+        initialTailPoint := Point{
+            X: rand.Float64() * (float64(world.Width) - 1),
+            Y: rand.Float64() * (float64(world.Height) - 1),
+        }
+
         newSnake := Snake{
-            Point: Point{
-                X: rand.Float64() * (float64(world.Width) - 1),
-                Y: rand.Float64() * (float64(world.Height) - 1),
-            },
             VelocityX: rand.Float64() / 5,
             VelocityY: rand.Float64() / 5,
             Length: rand.Intn(20) + 1,
             Symbol: firstSymbol + rune(i % 50),
+            Tail: []Point{initialTailPoint},
         }
+
         snakes = append(snakes, newSnake)
     }
 

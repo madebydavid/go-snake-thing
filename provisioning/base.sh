@@ -58,6 +58,25 @@ rm -rf /usr/local/go
 # move
 mv go /usr/local
 
+progressEcho "Compiling protobuf-compiler - this can take some time"
+apt-get install -y -qq build-essential
+
+protocVersion="3.4.1"
+protocArchive="protobuf-cpp-${protocVersion}.tar.gz"
+protocSource="https://github.com/google/protobuf/releases/download/v${protocVersion}/${protocArchive}"
+
+mkdir -p /tmp/proto/
+cd /tmp/proto/
+wget --no-verbose "$protocSource"
+tar zxvf "$protocArchive"
+cd "protobuf-${protocVersion}/"
+
+./configure --quiet
+make --quiet
+make install --quiet
+
+ldconfig
+
 progressEcho "Configuring workspace"
 
 # Setup path - if not already set
@@ -69,5 +88,9 @@ appendIfNotInFile \
 appendIfNotInFile \
   '/home/vagrant/.profile' \
   'export GOPATH=/vagrant'
+
+appendIfNotInFile \
+  '/etc/profile.d/00-aliases.sh' \
+  "alias ll='ls -l'"
 
 progressEcho "Done"
