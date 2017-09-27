@@ -1,4 +1,5 @@
 syntax = "proto3";
+package snakedata;
 
 message Snake {
   float VelocityX = 1;

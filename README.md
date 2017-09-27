@@ -13,6 +13,6 @@ snakes
 
 
 ```bash
-cd /vagrant/src/snakes
+cd /vagrant/src/snakedata
 protoc --go_out=. snakes.proto
 ```

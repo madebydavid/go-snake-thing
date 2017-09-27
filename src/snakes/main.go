@@ -7,6 +7,8 @@ import (
     "time"
     "math"
     "math/rand"
+    "github.com/golang/protobuf/proto"
+    "snakedata"
 )
 
 type World struct {
@@ -15,32 +17,7 @@ type World struct {
     Grid [][]rune 
 }
 
-type Point struct {
-    X float64
-    Y float64
-}
-
-type Snake struct {
-    VelocityX float64
-    VelocityY float64
-    Length int
-    Symbol rune
-    Tail []Point
-}
-
-func (point Point) GetRow() int {
-    return round((point).Y)
-}
-
-func (point Point) GetColumn() int {
-    return round((point).X)
-}
-
-func round(num float64) int {
-    return int(num + math.Copysign(0.5, num))
-}
-
-func newWorld(width, height int) (World) {
+func newWorld(width, height int) World {
 
     grid := make([][]rune, height)
 
@@ -73,14 +50,20 @@ func renderWorld(world World) {
     tm.Flush()
 }
 
-func putSymbolAtPoint(world *World, symbol rune, point Point) {
-    (*world).Grid[point.GetRow()][point.GetColumn()] = symbol;
+func putSymbolAtPoint(world *World, symbol rune, point snakedata.Snake_Point) {
+    column := round(point.X);
+    row := round(point.Y);
+    (*world).Grid[row][column] = symbol;
 }
 
-func moveSnakes(snakes *[]Snake, world *World) {
+func round(num float32) int {
+    return int(float64(num) + math.Copysign(0.5, float64(num)))
+}
 
-    maxX := float64((*world).Width) - 1
-    maxY := float64((*world).Height) - 1
+func moveSnakes(snakes *[]snakedata.Snake, world *World) {
+
+    maxX := float32((*world).Width) - 1
+    maxY := float32((*world).Height) - 1
 
     for i := 0; i < len(*snakes); i++ {
 
@@ -88,14 +71,15 @@ func moveSnakes(snakes *[]Snake, world *World) {
 
         // Clear the rendered tail
         for _, tailPoint := range snake.Tail {
-            putSymbolAtPoint(world, 0, tailPoint);
+            putSymbolAtPoint(world, 0, *tailPoint);
         }
 
         // Get the most recent point
-        previousTailPoint := (*snakes)[i].Tail[0]
+        previousTailPoint := *(*snakes)[i].Tail[0]
 
         // Apply the velocity and create new point
-        newTailPoint := Point{
+        
+        newTailPoint := &snakedata.Snake_Point{
             X: previousTailPoint.X + snake.VelocityX,
             Y: previousTailPoint.Y + snake.VelocityY,
         }
@@ -112,16 +96,16 @@ func moveSnakes(snakes *[]Snake, world *World) {
         }
 
         // Append to begining of tail
-        (*snakes)[i].Tail = append([]Point{newTailPoint} ,(*snakes)[i].Tail...)
+        (*snakes)[i].Tail = append([]*snakedata.Snake_Point{newTailPoint} ,(*snakes)[i].Tail...)
 
         // Trim tail to tail length
-        if len((*snakes)[i].Tail) > (*snakes)[i].Length { 
+        if int32(len((*snakes)[i].Tail)) > (*snakes)[i].Length { 
             (*snakes)[i].Tail = (*snakes)[i].Tail[0:(*snakes)[i].Length]
         }
         
         // Render the tail
         for _, tailPoint := range (*snakes)[i].Tail {
-            putSymbolAtPoint(world, snake.Symbol, tailPoint);
+            putSymbolAtPoint(world, snake.Symbol, *tailPoint);
         }
 
     }
@@ -143,27 +127,30 @@ func main() {
 
     world := newWorld(tm.Width() - 2 , tm.Height() - 2)
 
-    snakes := []Snake{}
+    snakes := []snakedata.Snake{}
 
     const snakeCount = 200
     const firstSymbol rune = 'A'
 
     for i := 0; i < snakeCount; i++ {
 
-        initialTailPoint := Point{
-            X: rand.Float64() * (float64(world.Width) - 1),
-            Y: rand.Float64() * (float64(world.Height) - 1),
+        initialTailPoint := &snakedata.Snake_Point{
+            X: rand.Float32() * (float32(world.Width) - 1),
+            Y: rand.Float32() * (float32(world.Height) - 1),
         }
 
-        newSnake := Snake{
-            VelocityX: rand.Float64() / 5,
-            VelocityY: rand.Float64() / 5,
-            Length: rand.Intn(20) + 1,
+        newSnake := &snakedata.Snake{
+            VelocityX: rand.Float32() / 5,
+            VelocityY: rand.Float32() / 5,
+            Length: int32(rand.Intn(20) + 1),
             Symbol: firstSymbol + rune(i % 50),
-            Tail: []Point{initialTailPoint},
+            Tail: []*snakedata.Snake_Point{initialTailPoint},
         }
 
-        snakes = append(snakes, newSnake)
+        snakes = append(snakes, *newSnake)
+
+
+        fmt.Println(proto.Marshal(newSnake));
     }
 
     tm.Clear()
