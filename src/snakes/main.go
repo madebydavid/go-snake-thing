@@ -3,7 +3,6 @@ package main
 import (
     tm "github.com/buger/goterm"
     "github.com/go-redis/redis"
-    "fmt"
     "time"
     "math"
     "math/rand"
@@ -60,7 +59,7 @@ func round(num float32) int {
     return int(float64(num) + math.Copysign(0.5, float64(num)))
 }
 
-func moveSnakes(snakes *[]snakedata.Snake, world *World) {
+func moveSnakes(snakes *[]snakedata.Snake, world *World, client *redis.Client) {
 
     maxX := float32((*world).Width) - 1
     maxY := float32((*world).Height) - 1
@@ -108,6 +107,12 @@ func moveSnakes(snakes *[]snakedata.Snake, world *World) {
             putSymbolAtPoint(world, snake.Symbol, *tailPoint);
         }
 
+        // Serialise the snake
+        serialisedSnake, _ := proto.Marshal(&(*snakes)[i])
+        // Persist to redis
+        client.LSet("snakes", int64(i), serialisedSnake)
+
+
     }
 }
 
@@ -116,12 +121,11 @@ func main() {
 
     client := redis.NewClient(&redis.Options{
         Addr:     "localhost:6379",
-        Password: "", // no password set
-        DB:       0,  // use default DB
+        Password: "",
+        DB:       0,
     })
 
-    pong, err := client.Ping().Result()
-    fmt.Println(pong, err)
+    client.LTrim("snakes", 0, 0)
 
     rand.Seed(time.Now().UTC().UnixNano())
 
@@ -149,14 +153,16 @@ func main() {
 
         snakes = append(snakes, *newSnake)
 
-
-        fmt.Println(proto.Marshal(newSnake));
+        // Serialise the snake
+        serialisedSnake, _ := proto.Marshal(newSnake)
+        // Persist
+        client.LPush("snakes", serialisedSnake)
     }
 
     tm.Clear()
 
     for {
-        moveSnakes(&snakes, &world)
+        moveSnakes(&snakes, &world, client)
         renderWorld(world)
         time.Sleep(time.Second / 100)
     }
